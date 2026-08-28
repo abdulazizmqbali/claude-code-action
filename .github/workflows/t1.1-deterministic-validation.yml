@@ -15,7 +15,7 @@ jobs:
       - name: Check out exact patch artifact
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: 1e89c4f7d7d1e32b6b14f795d4d36ed02896c14b
+          ref: 87aadcbacd2bd86d7767d8d906a45331b2e99734
 
       - name: Install Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
