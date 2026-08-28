@@ -7,6 +7,12 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { setupWorkloadIdentity } from "../src/workload-identity";
 
+const STATIC_CREDENTIAL_ENV_VARS = [
+  "ANTHROPIC_API_KEY",
+  "ANTHROPIC_AUTH_TOKEN",
+  "CLAUDE_CODE_OAUTH_TOKEN",
+] as const;
+
 describe("WIF static credential precedence", () => {
   let originalEnv: NodeJS.ProcessEnv;
   let tempDir: string;
@@ -22,9 +28,9 @@ describe("WIF static credential precedence", () => {
     process.env.ANTHROPIC_ORGANIZATION_ID =
       "00000000-0000-0000-0000-000000000000";
 
-    delete process.env.ANTHROPIC_API_KEY;
-    delete process.env.ANTHROPIC_AUTH_TOKEN;
-    delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
+    for (const credentialName of STATIC_CREDENTIAL_ENV_VARS) {
+      delete process.env[credentialName];
+    }
     delete process.env.ANTHROPIC_IDENTITY_TOKEN_FILE;
     delete process.env.ANTHROPIC_CONFIG_DIR;
     delete process.env.ANTHROPIC_PROFILE;
@@ -52,20 +58,16 @@ describe("WIF static credential precedence", () => {
     const handle = await setupWorkloadIdentity();
     try {
       expect(handle).toBeDefined();
-      expect(process.env.ANTHROPIC_API_KEY).toBeUndefined();
-      expect(process.env.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
-      expect(process.env.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
+      for (const credentialName of STATIC_CREDENTIAL_ENV_VARS) {
+        expect(process.env[credentialName]).toBeUndefined();
+      }
       expect(getIDTokenSpy).toHaveBeenCalledWith("https://api.anthropic.com");
     } finally {
       handle?.stop();
     }
   });
 
-  for (const credentialName of [
-    "ANTHROPIC_API_KEY",
-    "ANTHROPIC_AUTH_TOKEN",
-    "CLAUDE_CODE_OAUTH_TOKEN",
-  ] as const) {
+  for (const credentialName of STATIC_CREDENTIAL_ENV_VARS) {
     test(`preserves non-empty ${credentialName} precedence`, async () => {
       process.env[credentialName] = "real-static-credential";
 
@@ -73,6 +75,25 @@ describe("WIF static credential precedence", () => {
 
       expect(handle).toBeUndefined();
       expect(process.env[credentialName]).toBe("real-static-credential");
+      expect(getIDTokenSpy).not.toHaveBeenCalled();
+      expect(warningSpy).toHaveBeenCalled();
+    });
+
+    test(`preserves real ${credentialName} while removing other empty placeholders`, async () => {
+      for (const candidate of STATIC_CREDENTIAL_ENV_VARS) {
+        process.env[candidate] =
+          candidate === credentialName ? "real-static-credential" : "   ";
+      }
+
+      const handle = await setupWorkloadIdentity();
+
+      expect(handle).toBeUndefined();
+      expect(process.env[credentialName]).toBe("real-static-credential");
+      for (const candidate of STATIC_CREDENTIAL_ENV_VARS) {
+        if (candidate !== credentialName) {
+          expect(process.env[candidate]).toBeUndefined();
+        }
+      }
       expect(getIDTokenSpy).not.toHaveBeenCalled();
       expect(warningSpy).toHaveBeenCalled();
     });

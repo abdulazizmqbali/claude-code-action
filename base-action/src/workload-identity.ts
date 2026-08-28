@@ -150,6 +150,12 @@ export async function setupWorkloadIdentity(): Promise<
     return undefined;
   }
 
+  // Credential resolution distinguishes an unset variable from an explicitly
+  // present empty string. Composite-action inputs materialize omitted static
+  // credentials as empty strings, so remove only those empty placeholders
+  // before checking whether any real static credential should take precedence.
+  removeEmptyStaticCredentials();
+
   const staticCredential = configuredStaticCredential();
   if (staticCredential) {
     core.warning(
@@ -157,11 +163,6 @@ export async function setupWorkloadIdentity(): Promise<
     );
     return undefined;
   }
-
-  // Credential resolution distinguishes an unset variable from an explicitly
-  // present empty string. Composite-action inputs materialize omitted static
-  // credentials as empty strings, so remove only those empty placeholders.
-  removeEmptyStaticCredentials();
 
   const audience =
     process.env.ANTHROPIC_OIDC_AUDIENCE?.trim() || DEFAULT_OIDC_AUDIENCE;
