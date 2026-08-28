@@ -30,6 +30,19 @@ const REFRESH_INTERVAL_MS = 4 * 60 * 1000;
  */
 const DEFAULT_OIDC_AUDIENCE = "https://api.anthropic.com";
 
+/**
+ * Static credentials take precedence over federation in Claude Code. GitHub
+ * composite-action inputs are exported as empty strings when omitted, so WIF
+ * must remove those empty variables entirely before the Agent SDK snapshots
+ * process.env for the Claude subprocess. Real non-empty credentials retain
+ * their precedence and disable federation.
+ */
+const STATIC_CREDENTIAL_ENV_VARS = [
+  "ANTHROPIC_API_KEY",
+  "ANTHROPIC_AUTH_TOKEN",
+  "CLAUDE_CODE_OAUTH_TOKEN",
+] as const;
+
 export type WorkloadIdentityHandle = {
   tokenFile: string;
   stop: () => void;
@@ -49,6 +62,18 @@ export function isWorkloadIdentityConfigured(): boolean {
 
 async function fetchIdentityToken(audience: string) {
   return retryWithBackoff(() => core.getIDToken(audience));
+}
+
+function configuredStaticCredential(): string | undefined {
+  return STATIC_CREDENTIAL_ENV_VARS.find((name) => process.env[name]?.trim());
+}
+
+function removeEmptyStaticCredentials(): void {
+  for (const name of STATIC_CREDENTIAL_ENV_VARS) {
+    if (process.env[name] !== undefined && !process.env[name]?.trim()) {
+      delete process.env[name];
+    }
+  }
 }
 
 /**
@@ -125,12 +150,16 @@ export async function setupWorkloadIdentity(): Promise<
     return undefined;
   }
 
-  if (
-    process.env.ANTHROPIC_API_KEY?.trim() ||
-    process.env.CLAUDE_CODE_OAUTH_TOKEN?.trim()
-  ) {
+  // Credential resolution distinguishes an unset variable from an explicitly
+  // present empty string. Composite-action inputs materialize omitted static
+  // credentials as empty strings, so remove only those empty placeholders
+  // before checking whether any real static credential should take precedence.
+  removeEmptyStaticCredentials();
+
+  const staticCredential = configuredStaticCredential();
+  if (staticCredential) {
     core.warning(
-      "Workload identity federation inputs are set alongside anthropic_api_key or claude_code_oauth_token. The API key/OAuth token takes precedence, so federation will not be used.",
+      `Workload identity federation inputs are set alongside ${staticCredential}. The static credential takes precedence, so federation will not be used.`,
     );
     return undefined;
   }
