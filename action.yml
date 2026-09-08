@@ -494,7 +494,7 @@ runs:
         login, actor_id, actor_type = value.get("login"), value.get("id"), value.get("type")
         if (
             not isinstance(login, str)
-            or re.fullmatch(r"[A-Za-z0-9-]{1,39}(?:\\[bot\\])?", login) is None
+            or re.fullmatch(r"[A-Za-z0-9-]{1,39}(?:\[bot\])?", login) is None
             or type(actor_id) is not int
             or actor_id <= 0
             or actor_type not in {"Bot", "User"}
@@ -506,7 +506,7 @@ runs:
             separators=(",", ":"),
         )
         with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
-            output.write("identity=" + identity + "\\n")
+            output.write("identity=" + identity + "\n")
         PY
 
     - name: Revoke app token
