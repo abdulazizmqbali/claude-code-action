@@ -1,5 +1,6 @@
 import importlib.util
 import pathlib
+import tempfile
 import unittest
 
 
@@ -59,6 +60,28 @@ class CandidateTests(unittest.TestCase):
         }
         with self.assertRaises(publish.Denied):
             publish.validate_compare(value, "a" * 40, "b" * 40)
+
+    def test_candidate_path_is_fixed_beneath_resolved_runner_temp(self):
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = pathlib.Path(directory).resolve()
+            expected = temporary / "council-product-candidate-17-1.json"
+            expected.write_text("{}")
+            self.assertEqual(
+                publish.validate_candidate_path(str(expected), str(temporary), "17", "1"),
+                expected,
+            )
+            outside = temporary.parent / "outside-candidate.json"
+            outside.write_text("{}")
+            try:
+                traversed = temporary / ".." / outside.name
+                with self.assertRaises(publish.Denied):
+                    publish.validate_candidate_path(str(traversed), str(temporary), "17", "1")
+                expected.unlink()
+                expected.symlink_to(outside)
+                with self.assertRaises(publish.Denied):
+                    publish.validate_candidate_path(str(expected), str(temporary), "17", "1")
+            finally:
+                outside.unlink(missing_ok=True)
         value = self.candidate()
         value["files"][publish.PATHS[0]] = "bad\x00text"
         with self.assertRaises(publish.Denied):
