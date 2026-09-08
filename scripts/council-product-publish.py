@@ -10,8 +10,10 @@ compare-and-swap commit before the action revokes the token.
 from base64 import b64decode, b64encode
 import json
 import os
+from pathlib import Path
 import re
 import ssl
+import stat
 import sys
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode
@@ -78,6 +80,20 @@ def validate_compare(value, expected_head, published_head):
                          if isinstance(item, dict))) == PATHS and
             all(item.get("status") in {"added", "modified"} for item in files),
             "published commit changed a path outside the product contract")
+
+
+def validate_candidate_path(value, runner_temp, run_id, run_attempt):
+    temporary = Path(runner_temp).resolve(strict=True)
+    require(temporary.is_dir(), "runner temporary root is invalid")
+    expected = temporary / f"council-product-candidate-{run_id}-{run_attempt}.json"
+    supplied = Path(value)
+    require(supplied.is_absolute() and supplied == expected,
+            "candidate path is not the fixed run-owned location")
+    resolved = supplied.resolve(strict=True)
+    require(resolved == expected and resolved.parent == temporary and
+            stat.S_ISREG(supplied.lstat().st_mode) and not supplied.is_symlink(),
+            "candidate path escaped through traversal or a symlink")
+    return resolved
 
 
 class GitHub:
@@ -234,10 +250,12 @@ def main():
             "publisher is restricted to the qualified product repository")
     expected_head = os.environ.get("COUNCIL_PRODUCT_EXPECTED_HEAD", "")
     require(SHA.fullmatch(expected_head) is not None, "invalid expected product head")
-    candidate_path = os.environ.get("COUNCIL_PRODUCT_CANDIDATE", "")
-    require(candidate_path.startswith(os.environ.get("RUNNER_TEMP", "") + "/") and
-            os.path.isfile(candidate_path) and not os.path.islink(candidate_path),
-            "candidate path is not a trusted runner temporary file")
+    candidate_path = validate_candidate_path(
+        os.environ.get("COUNCIL_PRODUCT_CANDIDATE", ""),
+        os.environ.get("RUNNER_TEMP", ""),
+        os.environ.get("GITHUB_RUN_ID", ""),
+        os.environ.get("GITHUB_RUN_ATTEMPT", ""),
+    )
     require(os.path.getsize(candidate_path) <= MAX_BODY, "candidate bundle exceeded bound")
     with open(candidate_path, encoding="utf-8") as candidate:
         files = validate_candidate(json.load(candidate), expected_head)
