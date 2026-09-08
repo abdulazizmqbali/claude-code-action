@@ -65,6 +65,21 @@ def validate_candidate(value, expected_head):
     return normalized
 
 
+def validate_compare(value, expected_head, published_head):
+    require(isinstance(value, dict) and value.get("base_commit", {}).get("sha") == expected_head,
+            "published comparison base mismatch")
+    commits = value.get("commits")
+    require(value.get("total_commits") == 1 and isinstance(commits, list) and
+            len(commits) == 1 and commits[0].get("sha") == published_head,
+            "publication must be one direct commit")
+    files = value.get("files")
+    require(isinstance(files, list) and len(files) == len(PATHS) and
+            tuple(sorted(item.get("filename") for item in files
+                         if isinstance(item, dict))) == PATHS and
+            all(item.get("status") in {"added", "modified"} for item in files),
+            "published commit changed a path outside the product contract")
+
+
 class GitHub:
     def __init__(self, token):
         require(isinstance(token, str) and 20 <= len(token) <= 1024 and "\n" not in token,
@@ -156,6 +171,11 @@ class GitHub:
         parents = commit.get("parents")
         require(isinstance(parents, list) and len(parents) == 1 and
                 parents[0].get("sha") == expected_head, "published commit parent mismatch")
+        _, comparison = self.request(
+            "GET",
+            f"https://api.github.com/repos/{REPOSITORY}/compare/{expected_head}...{sha}?per_page=2",
+        )
+        validate_compare(comparison, expected_head, sha)
         for path in PATHS:
             encoded_path = quote(path, safe="/")
             _, item = self.request(
