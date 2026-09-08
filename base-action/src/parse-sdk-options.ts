@@ -198,6 +198,21 @@ export function parseSdkOptions(options: ClaudeOptions): ParsedSdkOptions {
   // Parse claudeArgs into extraArgs for CLI pass-through
   const extraArgs = parseClaudeArgsToExtraArgs(options.claudeArgs);
 
+  // An explicitly empty --tools value is a security boundary: expose no
+  // built-in Claude Code tools while still allowing named MCP tools through
+  // allowedTools. Keep omission distinct so ordinary callers retain defaults.
+  let selectedTools: SdkOptions["tools"] | undefined;
+  if (Object.prototype.hasOwnProperty.call(extraArgs, "tools")) {
+    const value = extraArgs["tools"];
+    selectedTools = value
+      ? value
+          .split(",")
+          .map((tool) => tool.trim())
+          .filter(Boolean)
+      : [];
+    delete extraArgs["tools"];
+  }
+
   // Detect if --json-schema is present (for hasJsonSchema flag)
   const hasJsonSchema = "json-schema" in extraArgs;
 
@@ -316,6 +331,7 @@ export function parseSdkOptions(options: ClaudeOptions): ParsedSdkOptions {
       : maxTurnsFromClaudeArgs
         ? parseInt(maxTurnsFromClaudeArgs, 10)
         : undefined,
+    tools: selectedTools,
     allowedTools:
       mergedAllowedTools.length > 0 ? mergedAllowedTools : undefined,
     disallowedTools:
