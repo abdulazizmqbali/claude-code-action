@@ -35,6 +35,30 @@ class CandidateTests(unittest.TestCase):
         value["files"][publish.PATHS[0]] = None
         with self.assertRaises(publish.Denied):
             publish.validate_candidate(value, "a" * 40)
+
+    def test_recovered_commit_requires_one_commit_and_exact_paths(self):
+        value = {
+            "base_commit": {"sha": "a" * 40},
+            "total_commits": 1,
+            "commits": [{"sha": "b" * 40}],
+            "files": [{"filename": path, "status": "modified"}
+                      for path in publish.PATHS],
+        }
+        publish.validate_compare(value, "a" * 40, "b" * 40)
+        value["files"].append({"filename": "package.json", "status": "modified"})
+        with self.assertRaises(publish.Denied):
+            publish.validate_compare(value, "a" * 40, "b" * 40)
+
+    def test_recovered_commit_rejects_extra_history(self):
+        value = {
+            "base_commit": {"sha": "a" * 40},
+            "total_commits": 2,
+            "commits": [{"sha": "c" * 40}, {"sha": "b" * 40}],
+            "files": [{"filename": path, "status": "modified"}
+                      for path in publish.PATHS],
+        }
+        with self.assertRaises(publish.Denied):
+            publish.validate_compare(value, "a" * 40, "b" * 40)
         value = self.candidate()
         value["files"][publish.PATHS[0]] = "bad\x00text"
         with self.assertRaises(publish.Denied):
