@@ -450,7 +450,7 @@ runs:
 
     - name: Verify GitHub token identity before revocation
       id: verify-github-token-identity
-      if: always() && steps.run.outputs.github_token != ''
+      if: always() && inputs.github_token == '' && steps.run.outputs.github_token != ''
       shell: bash
       env:
         ACTION_GITHUB_TOKEN: ${{ steps.run.outputs.github_token }}
