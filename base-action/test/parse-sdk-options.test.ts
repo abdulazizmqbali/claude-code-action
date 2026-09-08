@@ -257,6 +257,30 @@ describe("parseSdkOptions", () => {
     });
   });
 
+  describe("explicit tool selection", () => {
+    test("empty --tools disables every built-in tool while retaining allowed MCP tools", () => {
+      const options: ClaudeOptions = {
+        claudeArgs:
+          '--tools "" --strict-mcp-config --allowedTools "mcp__council_product__read_product_file,mcp__council_product__replace_product_file"',
+      };
+
+      const result = parseSdkOptions(options);
+
+      expect(result.sdkOptions.tools).toEqual([]);
+      expect(result.sdkOptions.allowedTools).toEqual([
+        "mcp__council_product__read_product_file",
+        "mcp__council_product__replace_product_file",
+      ]);
+      expect(result.sdkOptions.extraArgs?.["tools"]).toBeUndefined();
+      expect(result.sdkOptions.extraArgs?.["strict-mcp-config"]).toBeNull();
+    });
+
+    test("omitted --tools preserves the SDK default", () => {
+      const result = parseSdkOptions({ claudeArgs: "--max-turns 3" });
+      expect(result.sdkOptions.tools).toBeUndefined();
+    });
+  });
+
   describe("disallowedTools merging", () => {
     test("should extract disallowedTools from claudeArgs", () => {
       const options: ClaudeOptions = {

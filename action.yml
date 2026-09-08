@@ -165,6 +165,14 @@ inputs:
     description: "Newline-separated list of Claude Code plugin marketplace Git URLs to install from (e.g., 'https://github.com/user/marketplace1.git\nhttps://github.com/user/marketplace2.git')"
     required: false
     default: ""
+  council_product_candidate:
+    description: "Trusted runner-temp candidate bundle for the fixed DECISION-003 publisher"
+    required: false
+    default: ""
+  council_product_expected_head:
+    description: "Reserved 40-character product head for the DECISION-003 compare-and-swap"
+    required: false
+    default: ""
 
 outputs:
   conclusion:
@@ -182,6 +190,12 @@ outputs:
   github_token_identity:
     description: "Authenticated non-secret identity metadata for the GitHub token before revocation"
     value: ${{ steps.verify-github-token-identity.outputs.identity }}
+  council_product_published_sha:
+    description: "Deterministically published DECISION-003 commit SHA"
+    value: ${{ steps.publish-council-product.outputs.published_sha }}
+  council_product_pull_request_number:
+    description: "Claude-authored DECISION-003 pull request number"
+    value: ${{ steps.publish-council-product.outputs.pull_request_number }}
   structured_output:
     description: "JSON string containing all structured output fields when --json-schema is provided in claude_args. Use fromJSON() to parse: fromJSON(steps.id.outputs.structured_output).field_name"
     value: ${{ steps.run.outputs.structured_output }}
@@ -508,6 +522,20 @@ runs:
         with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
             output.write("identity=" + identity + "\n")
         PY
+
+    - name: Deterministically publish bounded Council product candidate
+      id: publish-council-product
+      if: >-
+        inputs.council_product_candidate != '' &&
+        inputs.github_token == '' &&
+        steps.run.outputs.github_token != '' &&
+        steps.run.outputs.conclusion == 'success'
+      shell: bash
+      env:
+        ACTION_GITHUB_TOKEN: ${{ steps.run.outputs.github_token }}
+        COUNCIL_PRODUCT_CANDIDATE: ${{ inputs.council_product_candidate }}
+        COUNCIL_PRODUCT_EXPECTED_HEAD: ${{ inputs.council_product_expected_head }}
+      run: python3 "${GITHUB_ACTION_PATH}/scripts/council-product-publish.py"
 
     - name: Revoke app token
       if: always() && inputs.github_token == '' && steps.run.outputs.github_token != '' && steps.run.outputs.skipped_due_to_workflow_validation_mismatch != 'true'
