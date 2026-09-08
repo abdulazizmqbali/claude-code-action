@@ -21,7 +21,7 @@ jobs:
         run: bun test
 
       - name: Run bounded Council publisher tests
-        run: python3 -m unittest test/council_product_publish_test.py -v
+        run: python3 test/council_product_publish_test.py -v
 
   prettier:
     runs-on: ubuntu-latest
